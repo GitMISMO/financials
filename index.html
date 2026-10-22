@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en" data-rs-gate>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MISMO Money</title>
+<!--
+  MISMO Money on resources.mismo.org: the public shell.
+
+  This page holds no MISMO figures, names or records, and no secrets. After
+  sign-in it reads the application itself (app/) and its records (data/) from
+  the PRIVATE repository GitMISMO/financials-data, through the save relay,
+  which checks on every request that the person signed in may open MISMO
+  Money. Signed out, or without access, nothing of it reaches the browser.
+
+  shim.js is the door to the relay. The loader below runs the application
+  once the shim has read every record, so no figure is ever drawn half-loaded.
+-->
+<script>
+/* the shared MISMO theme, set before anything is drawn so dark mode never flashes light */
+(function(){ try{ var t = localStorage.getItem('mismo.portal.theme'); if(t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); }catch(e){} })();
+</script>
+<style>
+  :root{ --mm-bg:#f4f7fa; --mm-card:#ffffff; --mm-line:#d7e3ec; --mm-ink:#0d314c; --mm-ink2:#456179; --mm-accent:#0d314c; --mm-sky:#74bfeb; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --mm-bg:#0b1a26; --mm-card:#102536; --mm-line:#24425a; --mm-ink:#e6eef5; --mm-ink2:#a9bfd1; --mm-accent:#74bfeb; } }
+  :root[data-theme="dark"]{ --mm-bg:#0b1a26; --mm-card:#102536; --mm-line:#24425a; --mm-ink:#e6eef5; --mm-ink2:#a9bfd1; --mm-accent:#74bfeb; }
+  html,body{ margin:0; background:var(--mm-bg); }
+  #mm-gate{ position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center; padding:16px;
+    background:var(--mm-bg); font-family:"IBM Plex Sans",system-ui,sans-serif; }
+  #mm-gate[hidden]{ display:none; }
+  #mm-gate .card{ max-width:420px; width:100%; background:var(--mm-card); border:1px solid var(--mm-line); border-radius:12px; padding:28px 26px; box-sizing:border-box; }
+  #mm-gate .card.wait{ animation:mmwait .25s ease .7s both; }
+  @keyframes mmwait{ from{opacity:0} to{opacity:1} }
+  #mm-gate .ey{ font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--mm-ink2); margin-bottom:6px; }
+  #mm-gate h1{ font-size:21px; margin:0 0 10px; color:var(--mm-ink); font-weight:700; }
+  #mm-gate p{ font-size:14px; line-height:1.5; margin:0 0 18px; color:var(--mm-ink2); }
+  #mm-gate button{ font:inherit; font-size:14px; font-weight:600; padding:10px 18px; border-radius:8px; border:1px solid var(--mm-accent);
+    background:var(--mm-accent); color:var(--mm-card); cursor:pointer; }
+  #mm-gate .bar{ height:4px; border-radius:2px; background:var(--mm-line); overflow:hidden; }
+  #mm-gate .bar i{ display:block; height:100%; width:0; background:var(--mm-sky); transition:width .2s; }
+</style>
+<script src="/assets/session.js"></script>
+<script src="shim.js"></script>
+</head>
+<body>
+<div id="mm-gate"></div>
+<script>
+/* ============================================================================
+   The loader: after sign-in, read the application from the private repository
+   and run it here, exactly as the Claude page ran it.
+
+   app/manifest.json lists every file of the application. Each is read through
+   the relay and handed to the page as a local (blob:) address, so the
+   application's own references (styles.css, engine.js, ...) find them without
+   change. Its scripts run one after another, in the order the page lists them.
+   ========================================================================== */
+(function(){
+  'use strict';
+  var gate = document.getElementById('mm-gate');
+  var TYPES = { js:'text/javascript', css:'text/css', html:'text/html', json:'application/json', svg:'image/svg+xml', png:'image/png' };
+  function card(h, p, opts){
+    opts = opts || {};
+    gate.hidden = false;
+    gate.innerHTML = '<div class="card' + (opts.wait ? ' wait' : '') + '"><div class="ey">MISMO Money</div><h1></h1><p></p></div>';
+    gate.querySelector('h1').textContent = h; gate.querySelector('p').textContent = p;
+    var c = gate.querySelector('.card');
+    if(opts.bar){ var b = document.createElement('div'); b.className = 'bar'; b.innerHTML = '<i></i>'; c.appendChild(b); }
+    if(opts.button){ var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = opts.button; btn.addEventListener('click', opts.onClick); c.appendChild(btn); }
+  }
+  function progress(f){ var i = gate.querySelector('.bar i'); if(i) i.style.width = Math.round(f * 100) + '%'; }
+  window.MM_GATE = function(kind, msg){
+    if(kind === 'loading') card('Opening MISMO Money…', 'Reading the records from the private data store.', { wait:true, bar:true });
+    else card('MISMO Money Couldn’t Load', msg || 'Something went wrong.', { button:'Try Again', onClick:function(){ location.reload(); } });
+  };
+
+  var BLOBS = {};
+  /* the application's inline loader reads its biggest files with XMLHttpRequest, by name */
+  var xopen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function(m, u){
+    var a = Array.prototype.slice.call(arguments);
+    if(typeof u === 'string' && BLOBS[u]) a[1] = BLOBS[u];
+    return xopen.apply(this, a);
+  };
+  function text(bytes){ return new TextDecoder('utf-8').decode(bytes); }
+
+  window.MM_START = function(){
+    var R = window.__mmRelay;
+    /* the first time only: the store is empty, so offer to load the records moved across
+       from the Claude page (a backup file kept by Jonna, never committed by hand) */
+    if(!Object.keys((R.index() || {}).docs || {}).length && window.ResourcesSession && window.ResourcesSession.canEdit(R.config.PROJECT) && !window.MM_SKIP_RESTORE){
+      return firstLoad(R);
+    }
+    card('Opening MISMO Money…', 'Reading the page from the private data store.', { bar:true });
+    R.readApp('app/manifest.json').then(function(b){
+      var man = JSON.parse(text(b)), list = man.files || [], done = 0, i = 0, got = {};
+      function next(){
+        if(i >= list.length) return Promise.resolve();
+        var f = list[i++];
+        return R.readApp('app/' + f.path).then(function(bytes){
+          if(typeof f.bytes === 'number' && bytes.length !== f.bytes) throw new Error(f.path + ' arrived with ' + bytes.length + ' bytes, not ' + f.bytes + '.');
+          got[f.path] = bytes; done++; progress(done / list.length);
+        }).then(next);
+      }
+      var lanes = []; for(var k = 0; k < 4; k++) lanes.push(next());
+      return Promise.all(lanes).then(function(){ return { man:man, got:got }; });
+    }).then(function(r){
+      Object.keys(r.got).forEach(function(p){
+        var ext = (p.split('.').pop() || '').toLowerCase();
+        BLOBS[p] = URL.createObjectURL(new Blob([r.got[p]], { type:(TYPES[ext] || 'application/octet-stream') + (/^(js|css|html|json)$/.test(ext) ? ';charset=utf-8' : '') }));
+      });
+      return run(text(r.got[r.man.entry || 'index.html']));
+    }).catch(function(e){
+      if(e && e.code) R.status.lastError = e.code;
+      window.MM_GATE('error', (e && e.code && R.why()) || (e && e.message) || 'The page could not be read.');
+    });
+  };
+
+  function firstLoad(R){
+    card('MISMO Money Has No Records Yet', 'Load the backup taken from the Claude page. Every record is saved to the private data store, then the page opens.',
+      { button:'Choose the Backup File', onClick:function(){ pick.click(); } });
+    var skip = document.createElement('button'); skip.type = 'button'; skip.textContent = 'Open Empty';
+    skip.style.cssText = 'margin-left:8px;background:transparent;color:var(--mm-ink)';
+    skip.addEventListener('click', function(){ window.MM_SKIP_RESTORE = true; window.MM_START(); });
+    gate.querySelector('.card').appendChild(skip);
+    var pick = document.createElement('input'); pick.type = 'file'; pick.accept = '.json,application/json'; pick.hidden = true;
+    gate.appendChild(pick);
+    pick.addEventListener('change', function(){
+      var f = pick.files && pick.files[0]; if(!f) return;
+      f.text().then(function(t){
+        var backup = JSON.parse(t), n = 0;
+        Object.keys(backup).forEach(function(c){ n += Object.keys(backup[c] || {}).length; });
+        if(!n) throw new Error('That file has no records in it.');
+        card('Saving ' + n + ' Records…', 'Keep this tab open. They go to the private data store a few at a time.', { bar:true });
+        var tick = setInterval(function(){ progress(Math.min(1, Object.keys((R.index() || {}).docs || {}).length / n)); }, 500);
+        return R.restore(backup).then(function(saved){ clearInterval(tick); return saved; });
+      }).then(function(saved){
+        card('Saved ' + saved + ' Records', 'Opening MISMO Money…', { bar:true });
+        setTimeout(function(){ location.reload(); }, 800);
+      }).catch(function(e){
+        window.MM_GATE('error', 'The backup was not loaded: ' + ((e && e.message) || 'unknown error') + ' Nothing else was changed.');
+      });
+    });
+  }
+
+  function run(html){
+    var t = document.createElement('template');
+    t.innerHTML = html;
+    var frag = t.content;
+    var title = frag.querySelector('title');
+    if(title){ document.title = 'MISMO Money'; title.remove(); }
+    var waits = [];
+    Array.prototype.forEach.call(frag.querySelectorAll('link[href]'), function(l){
+      var h = l.getAttribute('href');
+      if(BLOBS[h]){ l.setAttribute('href', BLOBS[h]); }
+      if(l.rel === 'stylesheet') waits.push(new Promise(function(res){ l.addEventListener('load', res); l.addEventListener('error', res); setTimeout(res, 8000); }));
+    });
+    /* everything goes in under the gate; the gate stays on top until the scripts have run */
+    var scripts = Array.prototype.slice.call(frag.querySelectorAll('script'));
+    document.body.insertBefore(frag, gate);
+    var mast = document.querySelector('.mast-right');
+    if(mast && !document.getElementById('rs-account')){
+      var acc = document.createElement('div'); acc.id = 'rs-account'; mast.appendChild(acc);
+      if(window.ResourcesSession && window.ResourcesSession.mount) window.ResourcesSession.mount(acc);
+    }
+    var chain = Promise.all(waits);
+    scripts.forEach(function(old){
+      chain = chain.then(function(){
+        return new Promise(function(res){
+          var s = document.createElement('script');
+          Array.prototype.forEach.call(old.attributes, function(a){ if(a.name !== 'src') s.setAttribute(a.name, a.value); });
+          var src = old.getAttribute('src');
+          if(src){
+            s.src = BLOBS[src] || src; s.async = false;
+            s.onload = res; s.onerror = function(){ console.error('MISMO Money: ' + src + ' did not run'); res(); };
+            old.parentNode.replaceChild(s, old);
+          } else {
+            s.textContent = old.textContent;
+            old.parentNode.replaceChild(s, old);
+            res();
+          }
+        });
+      });
+    });
+    return chain.then(function(){
+      requestAnimationFrame(function(){ gate.hidden = true; gate.innerHTML = ''; document.documentElement.classList.add('mm-ready'); });
+    });
+  }
+})();
+</script>
+</body>
+</html>
