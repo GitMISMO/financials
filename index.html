@@ -67,9 +67,18 @@
     if(opts.bar){ var b = document.createElement('div'); b.className = 'bar'; b.innerHTML = '<i></i>'; c.appendChild(b); }
     if(opts.button){ var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = opts.button; btn.addEventListener('click', opts.onClick); c.appendChild(btn); }
   }
+  /* how long opening usually takes on this computer: the middle of the last five openings
+     the application timed (its own "Reading" note says the same), 15 seconds the first time */
+  function usual(){
+    var a = [];
+    try{ a = JSON.parse(localStorage.getItem('mm.openSeconds') || '[]'); }catch(e){}
+    a = (Array.isArray(a) ? a : []).filter(function(x){ return typeof x === 'number' && x > 0 && x < 600; }).sort(function(x, y){ return x - y; });
+    var n = a.length ? Math.max(1, Math.ceil(a[Math.floor(a.length / 2)])) : 15;
+    return ' This usually takes about ' + n + ' seconds.';
+  }
   function progress(f){ var i = gate.querySelector('.bar i'); if(i) i.style.width = Math.round(f * 100) + '%'; }
   window.MM_GATE = function(kind, msg){
-    if(kind === 'loading') card('Opening MISMO Money…', 'Reading the records from the private data store.', { wait:true, bar:true });
+    if(kind === 'loading') card('Opening MISMO Money…', 'Reading the records from the private data store.' + usual(), { wait:true, bar:true });
     else card('MISMO Money Couldn’t Load', msg || 'Something went wrong.', { button:'Try Again', onClick:function(){ location.reload(); } });
   };
 
@@ -137,7 +146,7 @@
     if(!Object.keys((R.index() || {}).docs || {}).length && window.ResourcesSession && window.ResourcesSession.canEdit(R.config.PROJECT) && !window.MM_SKIP_RESTORE){
       return firstLoad(R);
     }
-    card('Opening MISMO Money…', 'Reading the page from the private data store.', { bar:true });
+    card('Opening MISMO Money…', 'Reading the page from the private data store.' + usual(), { bar:true });
     progress(appFrac);
     window.MM_PREFETCH().then(function(r){
       Object.keys(r.got).forEach(function(p){
