@@ -83,6 +83,53 @@
   };
   function text(bytes){ return new TextDecoder('utf-8').decode(bytes); }
 
+  /* The page's own files are read as soon as the sign-in is accepted, at the same time as the
+     records (shim.js calls this), not after them. They arrive as a few packs (app/pack-<n>.mmpack,
+     the files laid end to end, cut apart here by the manifest's byte counts) rather than one
+     request a file: every request is a round trip to GitHub through the relay. A manifest
+     without packs is read file by file, as before. Nothing is run until the records are in. */
+  var appRead = null, appFrac = 0;
+  function readTheApp(){
+    var R = window.__mmRelay, got = {}, done = 0;
+    return R.readApp('app/manifest.json').then(function(b){
+      var man = JSON.parse(text(b));
+      var jobs = (man.packs && man.packs.length) ? man.packs.map(function(p){
+        return { path:p.path, bytes:p.bytes, take:function(bytes){
+          p.files.forEach(function(f){
+            if(f.at + f.bytes > bytes.length) throw new Error(f.path + ' is missing from ' + p.path + '.');
+            got[f.path] = bytes.subarray(f.at, f.at + f.bytes);
+          });
+        } };
+      }) : (man.files || []).map(function(f){
+        return { path:f.path, bytes:f.bytes, take:function(bytes){ got[f.path] = bytes; } };
+      });
+      var i = 0;
+      function next(){
+        if(i >= jobs.length) return Promise.resolve();
+        var j = jobs[i++];
+        return R.readApp('app/' + j.path).then(function(bytes){
+          if(typeof j.bytes === 'number' && bytes.length !== j.bytes) throw new Error(j.path + ' arrived with ' + bytes.length + ' bytes, not ' + j.bytes + '.');
+          j.take(bytes); done++; appFrac = done / jobs.length; progress(appFrac);
+        }).then(next);
+      }
+      var lanes = []; for(var k = 0; k < Math.min(6, jobs.length); k++) lanes.push(next());
+      return Promise.all(lanes).then(function(){
+        (man.files || []).forEach(function(f){
+          if(!got[f.path]) throw new Error(f.path + ' did not arrive.');
+          if(typeof f.bytes === 'number' && got[f.path].length !== f.bytes) throw new Error(f.path + ' arrived with ' + got[f.path].length + ' bytes, not ' + f.bytes + '.');
+        });
+        return { man:man, got:got };
+      });
+    });
+  }
+  window.MM_PREFETCH = function(){
+    if(!appRead){
+      appRead = readTheApp();
+      appRead.catch(function(){ appRead = null; });   /* a failed read is tried again when the page is started */
+    }
+    return appRead;
+  };
+
   window.MM_START = function(){
     var R = window.__mmRelay;
     /* the first time only: the store is empty, so offer to load the records moved across
@@ -91,19 +138,8 @@
       return firstLoad(R);
     }
     card('Opening MISMO Money…', 'Reading the page from the private data store.', { bar:true });
-    R.readApp('app/manifest.json').then(function(b){
-      var man = JSON.parse(text(b)), list = man.files || [], done = 0, i = 0, got = {};
-      function next(){
-        if(i >= list.length) return Promise.resolve();
-        var f = list[i++];
-        return R.readApp('app/' + f.path).then(function(bytes){
-          if(typeof f.bytes === 'number' && bytes.length !== f.bytes) throw new Error(f.path + ' arrived with ' + bytes.length + ' bytes, not ' + f.bytes + '.');
-          got[f.path] = bytes; done++; progress(done / list.length);
-        }).then(next);
-      }
-      var lanes = []; for(var k = 0; k < 4; k++) lanes.push(next());
-      return Promise.all(lanes).then(function(){ return { man:man, got:got }; });
-    }).then(function(r){
+    progress(appFrac);
+    window.MM_PREFETCH().then(function(r){
       Object.keys(r.got).forEach(function(p){
         var ext = (p.split('.').pop() || '').toLowerCase();
         BLOBS[p] = URL.createObjectURL(new Blob([r.got[p]], { type:(TYPES[ext] || 'application/octet-stream') + (/^(js|css|html|json)$/.test(ext) ? ';charset=utf-8' : '') }));
