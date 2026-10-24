@@ -41,7 +41,7 @@
   var FLUSH_MS = 350, RETRY_MS = 8000;
   var MAX_FILE = 900000;          /* bytes per data file; the relay reads at most 1 MB */
   var MAX_COMMIT = 5200000;       /* bytes per commit request; the relay takes 5.5 MB */
-  var READS_AT_ONCE = 4;
+  var READS_AT_ONCE = 8;          /* the records are about twenty files: two rounds, not five */
 
   /* ---------- browser storage: every tool shares this web address ---------- */
   (function () {
@@ -98,7 +98,7 @@
   function readData(name) {
     return net('GET', 'data/' + encodeURIComponent(name)).then(function (b) { return (b && b.data) || null; });
   }
-  /* a few at a time, so one page opening never floods the relay's shared GitHub budget */
+  /* a few at a time (each is one GitHub request, so this changes how fast, not how many) */
   function readMany(names) {
     var out = {}, i = 0;
     function next() {
@@ -560,6 +560,8 @@
     rs.requireAccess(PROJECT, { toolName: TOOL }).then(function () {
       if (ready) return;
       window.MM_GATE && window.MM_GATE('loading');
+      /* the page's own files are read alongside the records, not after them (index.html) */
+      if (window.MM_PREFETCH) window.MM_PREFETCH().catch(function () {});
       return loadAll().then(function () {
         ready = true; starting = false; resumeWrites();
         readyWaiters.splice(0).forEach(function (r) { r(); });
