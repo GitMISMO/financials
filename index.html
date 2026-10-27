@@ -96,17 +96,21 @@
      records (shim.js calls this), not after them. They arrive as a few packs (app/pack-<n>.mmpack,
      the files laid end to end, cut apart here by the manifest's byte counts) rather than one
      request a file: every request is a round trip to GitHub through the relay. A manifest
-     without packs is read file by file, as before. Nothing is run until the records are in. */
+     without packs is read file by file, as before. Nothing is run until the records are in.
+     A file too big for one relay answer comes in pieces ({piece, pieces} in the packs, 27 October
+     2026), joined here in order before it is checked. */
   var appRead = null, appFrac = 0;
   function readTheApp(){
-    var R = window.__mmRelay, got = {}, done = 0;
+    var R = window.__mmRelay, got = {}, pieces = {}, done = 0;
     return R.readApp('app/manifest.json').then(function(b){
       var man = JSON.parse(text(b));
       var jobs = (man.packs && man.packs.length) ? man.packs.map(function(p){
         return { path:p.path, bytes:p.bytes, take:function(bytes){
           p.files.forEach(function(f){
             if(f.at + f.bytes > bytes.length) throw new Error(f.path + ' is missing from ' + p.path + '.');
-            got[f.path] = bytes.subarray(f.at, f.at + f.bytes);
+            var b = bytes.subarray(f.at, f.at + f.bytes);
+            if(f.pieces) (pieces[f.path] = pieces[f.path] || { n:f.pieces, list:[] }).list[f.piece] = b;
+            else got[f.path] = b;
           });
         } };
       }) : (man.files || []).map(function(f){
@@ -123,6 +127,13 @@
       }
       var lanes = []; for(var k = 0; k < Math.min(6, jobs.length); k++) lanes.push(next());
       return Promise.all(lanes).then(function(){
+        Object.keys(pieces).forEach(function(p){
+          var x = pieces[p], n = 0, at = 0;
+          for(var k = 0; k < x.n; k++){ if(!x.list[k]) throw new Error(p + ' is missing a piece.'); n += x.list[k].length; }
+          var all = new Uint8Array(n);
+          x.list.forEach(function(b){ all.set(b, at); at += b.length; });
+          got[p] = all;
+        });
         (man.files || []).forEach(function(f){
           if(!got[f.path]) throw new Error(f.path + ' did not arrive.');
           if(typeof f.bytes === 'number' && got[f.path].length !== f.bytes) throw new Error(f.path + ' arrived with ' + got[f.path].length + ' bytes, not ' + f.bytes + '.');
