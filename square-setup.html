@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Confirm Member Set-Up</title>
+<!--
+  MISMO Money: the membership team marks a Square set-up done from the set-up email (no sign-in).
+
+  The email's "Mark as Set Up in Aptify" button opens this page. Opening it changes nothing (Outlook's
+  Safe Links opens links on its own); only the Confirm button does. The company, amount and Square
+  reference shown come from the link itself. Confirm sends only the email's code to a Power Automate
+  flow, which checks the code against the one MISMO Money filed for that payment, saves the confirm
+  once in the private records, and sends the browser back here with the answer (?done=...).
+  No MISMO records are read or held here.
+-->
+<script>
+(function(){ try{ var t = localStorage.getItem('mismo.portal.theme'); if(t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); }catch(e){} })();
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{ --bg:#f1f6fa; --card:#ffffff; --line:#d5e2ed; --ink:#0d314c; --ink2:#456179; --ink3:#6c899f; --navy:#0d314c; --sky:#74bfeb; --btn:#0d314c; --btn-ink:#ffffff; --ok:#2b7a4b; --bad:#a32219; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#0b1a26; --card:#102536; --line:#24425a; --ink:#e6eef5; --ink2:#a9bfd1; --ink3:#8aa3b8; --btn:#74bfeb; --btn-ink:#0b1a26; --ok:#7fd1a0; --bad:#ff8f86; } }
+  :root[data-theme="dark"]{ --bg:#0b1a26; --card:#102536; --line:#24425a; --ink:#e6eef5; --ink2:#a9bfd1; --ink3:#8aa3b8; --btn:#74bfeb; --btn-ink:#0b1a26; --ok:#7fd1a0; --bad:#ff8f86; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; background:var(--bg); color:var(--ink); font-family:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif; }
+  main{ max-width:520px; margin:0 auto; padding:32px 16px 48px; }
+  .card{ background:var(--card); border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+  .head{ background:var(--navy); padding:14px 22px; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+  .logo{ background:#fff; border-radius:5px; padding:7px 10px; display:inline-block; line-height:0; }
+  .logo img{ width:112px; height:auto; display:block; }
+  .head span{ color:#a9d8f3; font-size:13px; font-weight:600; }
+  .rule{ height:3px; background:var(--sky); }
+  .body{ padding:22px 22px 24px; }
+  h1{ font-size:21px; margin:0 0 6px; font-weight:700; }
+  .sub{ font-size:14px; color:var(--ink2); margin:0 0 18px; line-height:1.5; }
+  dl{ display:grid; grid-template-columns:minmax(7.5em,38%) minmax(0,1fr); margin:0 0 20px; font-size:14px; border-top:1px solid var(--line); }
+  dt,dd{ margin:0; padding:9px 0; border-bottom:1px solid var(--line); }
+  dt{ color:var(--ink3); padding-right:10px; }
+  dd{ font-weight:600; overflow-wrap:anywhere; }
+  button{ font:inherit; font-size:15px; font-weight:700; padding:12px 22px; border-radius:7px; border:0; background:var(--btn); color:var(--btn-ink); cursor:pointer; }
+  button:focus-visible{ outline:2px solid var(--sky); outline-offset:2px; }
+  button[disabled]{ opacity:.55; cursor:default; }
+  .msg{ font-size:14.5px; line-height:1.55; margin:0; }
+  .msg.ok{ color:var(--ok); font-weight:600; }
+  .msg.bad{ color:var(--bad); font-weight:600; }
+  .note{ font-size:12.5px; color:var(--ink3); margin:16px 0 0; line-height:1.5; }
+</style>
+</head>
+<body>
+<main>
+  <div class="card">
+    <div class="head"><span class="logo"><img src="https://resources.mismo.org/member-360/mismo-logo-email.png" alt="MISMO"></span><span>MISMO Money</span></div>
+    <div class="rule"></div>
+    <div class="body" id="box">
+      <h1>Confirm Member Set-Up</h1>
+      <p class="sub" id="sub">Reading the link…</p>
+    </div>
+  </div>
+</main>
+<script>
+(function(){
+  'use strict';
+  /* the Power Automate flow "MISMO Money - Square Set-Up Confirm" (When an HTTP request is received) */
+  var FLOW = '';
+  var box = document.getElementById('box');
+  var q = new URLSearchParams(location.search);
+  var code = String(q.get('c') || '').toLowerCase(), done = q.get('done') || '';
+  var KEEP = 'mm.square.setup.' + code;
+  function el(tag, cls, text){ var n = document.createElement(tag); if(cls) n.className = cls; if(text != null) n.textContent = text; return n; }
+  function money(v){ var n = Number(v); return isFinite(n) && String(v) !== '' ? '$' + n.toLocaleString('en-US', { minimumFractionDigits:2, maximumFractionDigits:2 }) : ''; }
+  function clear(){ while(box.firstChild) box.removeChild(box.firstChild); }
+  function details(){
+    var d = { co:q.get('co') || '', a:q.get('a') || '', r:q.get('r') || '', k:q.get('k') || '' };
+    if(!d.co){ try{ var s = JSON.parse(sessionStorage.getItem(KEEP) || 'null'); if(s) d = s; }catch(e){} }
+    return d;
+  }
+  function list(d){
+    var dl = el('dl');
+    [['Company', d.co], ['Rate', d.k ? d.k + ' rate' : ''], ['Amount', money(d.a)], ['Square reference', d.r || '—']].forEach(function(p){
+      if(!p[1]) return; dl.appendChild(el('dt', null, p[0])); dl.appendChild(el('dd', null, p[1]));
+    });
+    return dl;
+  }
+  var d = details();
+  clear();
+  box.appendChild(el('h1', null, 'Confirm Member Set-Up'));
+  if(!/^[0-9a-f]{32}$/.test(code)){
+    box.appendChild(el('p', 'msg bad', 'This link is missing its code. Open it again from the set-up email.'));
+    return;
+  }
+  if(done){
+    box.appendChild(list(d));
+    var said = {
+      ok:   ['msg ok',  'Thank you. ' + (d.co || 'The company') + ' is recorded as set up in Aptify. MISMO Money shows it within a few minutes.'],
+      used: ['msg ok',  'This set-up was already confirmed. Nothing more to do.'],
+      bad:  ['msg bad', 'This link is not recognised. Open it again from the set-up email, or reply to the email instead.'],
+      err:  ['msg bad', 'That did not go through. Please press Confirm once more.']
+    }[done] || ['msg bad', 'That did not go through. Please press Confirm once more.'];
+    box.appendChild(el('p', said[0], said[1]));
+    if(done !== 'err') return;
+  } else {
+    box.appendChild(el('p', 'sub', 'Press Confirm once this company is set up in Aptify as a MISMO member. This is the only step.'));
+    box.appendChild(list(d));
+  }
+  if(!FLOW){
+    box.appendChild(el('p', 'msg bad', 'Confirming here is not switched on yet. Please reply to the set-up email instead.'));
+    return;
+  }
+  var f = document.createElement('form');
+  f.method = 'POST'; f.action = FLOW; f.acceptCharset = 'utf-8';
+  var h = document.createElement('input'); h.type = 'hidden'; h.name = 'code'; h.value = code; f.appendChild(h);
+  var b = el('button', null, 'Confirm Set Up in Aptify'); b.type = 'submit'; f.appendChild(b);
+  f.addEventListener('submit', function(){
+    try{ sessionStorage.setItem(KEEP, JSON.stringify(d)); }catch(e){}
+    setTimeout(function(){ b.disabled = true; b.textContent = 'Confirming…'; }, 0);
+  });
+  box.appendChild(f);
+  box.appendChild(el('p', 'note', 'This link works for this one payment, once.'));
+})();
+</script>
+</body>
+</html>
