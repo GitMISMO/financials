@@ -25,9 +25,9 @@
    the change is re-applied on top of theirs and sent again.
 
    Kept files (invoices, statements) go to files/<id> in the same repository.
-   Ask AI on the Help page goes to the relay's Ask route if it is switched on
-   for this project; otherwise the box stays hidden, as it always has when the
-   page cannot ask.
+   Drafting from notes (the Snapdocs builder's Draft It From Their Notes) goes to
+   the relay's Ask route if it is switched on for this project; otherwise that
+   button stays hidden.
    ========================================================================== */
 (function () {
   'use strict';
@@ -515,7 +515,7 @@
     }, function (e) { return new Response('', { status: e.status || 502 }); });
   };
 
-  /* ---------- Ask AI, through the relay's Ask route ---------- */
+  /* ---------- drafting from notes, through the relay's Ask route ---------- */
   function sample(prompt, opts) {
     opts = opts || {};
     if (opts.tools && opts.tools.length) return Promise.reject(err('tools_unavailable', 'Page tools are not available here.'));
