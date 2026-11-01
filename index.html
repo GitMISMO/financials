@@ -3,6 +3,10 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- the page's own font, so the opening card looks the same before and after the page arrives -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <title>MISMO Money</title>
 <!--
   MISMO Money on resources.mismo.org: the public shell.
@@ -21,9 +25,9 @@
 (function(){ try{ var t = localStorage.getItem('mismo.portal.theme'); if(t === 'dark' || t === 'light') document.documentElement.setAttribute('data-theme', t); }catch(e){} })();
 </script>
 <style>
-  :root{ --mm-bg:#f4f7fa; --mm-card:#ffffff; --mm-line:#d7e3ec; --mm-ink:#0d314c; --mm-ink2:#456179; --mm-accent:#0d314c; --mm-sky:#74bfeb; }
-  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --mm-bg:#0b1a26; --mm-card:#102536; --mm-line:#24425a; --mm-ink:#e6eef5; --mm-ink2:#a9bfd1; --mm-accent:#74bfeb; } }
-  :root[data-theme="dark"]{ --mm-bg:#0b1a26; --mm-card:#102536; --mm-line:#24425a; --mm-ink:#e6eef5; --mm-ink2:#a9bfd1; --mm-accent:#74bfeb; }
+  :root{ --mm-bg:#f4f7fa; --mm-card:#ffffff; --mm-line:#d7e3ec; --mm-ink:#0d314c; --mm-ink2:#456179; --mm-accent:#0d314c; --mm-sky:#74bfeb; --mm-ink3:#7794aa; --mm-ocard:#ffffff; --mm-oink:#0d314c; --mm-oink2:#456179; }
+  @media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --mm-bg:#0b1a26; --mm-card:#102536; --mm-line:#24425a; --mm-ink:#e6eef5; --mm-ink2:#a9bfd1; --mm-accent:#74bfeb; --mm-ink3:#7a9db4; --mm-ocard:#0d2837; --mm-oink:#e9f4fb; --mm-oink2:#a6c5d9; } }
+  :root[data-theme="dark"]{ --mm-bg:#0b1a26; --mm-card:#102536; --mm-line:#24425a; --mm-ink:#e6eef5; --mm-ink2:#a9bfd1; --mm-accent:#74bfeb; --mm-ink3:#7a9db4; --mm-ocard:#0d2837; --mm-oink:#e9f4fb; --mm-oink2:#a6c5d9; }
   html,body{ margin:0; background:var(--mm-bg); }
   #mm-gate{ position:fixed; inset:0; z-index:9400; display:flex; align-items:center; justify-content:center; padding:16px;
     background:var(--mm-bg); font-family:"IBM Plex Sans",system-ui,sans-serif; }
@@ -38,6 +42,31 @@
     background:var(--mm-accent); color:var(--mm-card); cursor:pointer; }
   #mm-gate .bar{ height:4px; border-radius:2px; background:var(--mm-line); overflow:hidden; }
   #mm-gate .bar i{ display:block; height:100%; width:0; background:var(--mm-sky); transition:width .2s; }
+  /* the opening card: the same card as Member 360's opening screen, and the same one the page
+     itself shows next (app/index.html, MM_OPENING), so opening reads as one screen */
+  #mm-gate.opening{ background:radial-gradient(120% 90% at 100% 0%,rgba(116,191,235,.18),transparent 55%),linear-gradient(160deg,#10324a,#0b2436); }
+  #mm-gate .mmo-card{ max-width:440px; width:100%; box-sizing:border-box; background:var(--mm-ocard); color:var(--mm-oink); border:1px solid rgba(116,191,235,.3);
+    border-radius:12px; padding:28px 26px; box-shadow:0 24px 60px -24px rgba(0,0,0,.6); }
+  #mm-gate .mmo-card{ font-size:14px; line-height:1.5; }
+  #mm-gate .mmo-card h1{ letter-spacing:-.012em; }
+  #mm-gate .mmo-card .ey{ color:var(--mm-ink3); }
+  #mm-gate .mmo-card h1, #mm-gate .mmo-t, #mm-gate .mmo-list li.ok{ color:var(--mm-oink); }
+  #mm-gate .mmo-card p{ margin:0 0 16px; color:var(--mm-oink2); }
+  #mm-gate .mmo-card p b{ font-variant-numeric:tabular-nums; }
+  #mm-gate .mmo-clock{ display:flex; align-items:baseline; gap:8px; margin:0 0 10px; }
+  #mm-gate .mmo-t{ font-size:34px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; }
+  #mm-gate .mmo-of{ font-size:12.5px; color:var(--mm-ink3); white-space:nowrap; }
+  #mm-gate .mmo-bar{ height:5px; border-radius:3px; background:rgba(116,191,235,.2); overflow:hidden; margin:0 0 16px; }
+  #mm-gate .mmo-bar i{ display:block; height:100%; width:0; background:linear-gradient(90deg,#74bfeb,#0d314c); transition:width .4s ease; }
+  #mm-gate .mmo-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; }
+  #mm-gate .mmo-list li{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--mm-ink3); white-space:nowrap; }
+  #mm-gate .mmo-list li i{ width:16px; height:16px; border-radius:50%; border:2px solid rgba(116,191,235,.55); border-top-color:transparent; box-sizing:border-box;
+    flex:none; position:relative; animation:mmoSpin 1s linear infinite; }
+  #mm-gate .mmo-list li.ok i{ animation:none; border-color:#2e9e6a; background:#2e9e6a; }
+  #mm-gate .mmo-list li.ok i::after{ content:""; position:absolute; left:4px; top:1px; width:4px; height:8px; border:solid #fff; border-width:0 2px 2px 0; transform:rotate(45deg); }
+  #mm-gate .mmo-note{ font-size:12.5px; color:var(--mm-ink3); margin-top:12px; min-height:1px; }
+  @keyframes mmoSpin{ to{ transform:rotate(360deg) } }
+  @media (prefers-reduced-motion: reduce){ #mm-gate .mmo-list li i{ animation:none } }
 </style>
 <script src="/assets/session.js"></script>
 <script src="shim.js"></script>
@@ -60,7 +89,7 @@
   var TYPES = { js:'text/javascript', css:'text/css', html:'text/html', json:'application/json', svg:'image/svg+xml', png:'image/png' };
   function card(h, p, opts){
     opts = opts || {};
-    gate.hidden = false;
+    gate.hidden = false; stopOpening(); gate.className = '';
     gate.innerHTML = '<div class="card' + (opts.wait ? ' wait' : '') + '"><div class="ey">MISMO Money</div><h1></h1><p></p></div>';
     gate.querySelector('h1').textContent = h; gate.querySelector('p').textContent = p;
     var c = gate.querySelector('.card');
@@ -77,8 +106,43 @@
     return ' This usually takes about ' + n + ' seconds.';
   }
   function progress(f){ var i = gate.querySelector('.bar i'); if(i) i.style.width = Math.round(f * 100) + '%'; }
+
+  /* The opening card (Jonna, 1 November 2026: "do the loading screen like member 360 did it"):
+     each step ticked as it finishes, a running clock and how long opening usually takes. The
+     records and the page are read here; the page itself then shows the same card and ticks the
+     last two once every figure is final (app/index.html). The clock starts now (MM_OPEN_T0), and
+     the page's card carries it on. */
+  var OPEN_STEPS = ['Saved Records', 'The Page', 'Figures Worked Out', 'Final Figures'], openOk = [false, false, false, false], openT = null;
+  function usualN(){ var m = usual().match(/(\d+)/); return m ? +m[1] : 15; }
+  function opening(){
+    if(typeof window.MM_OPEN_T0 !== 'number') window.MM_OPEN_T0 = performance.now();
+    if(!gate.classList.contains('opening')){
+      gate.hidden = false; gate.className = 'opening';
+      gate.innerHTML = '<div class="mmo-card" role="status" aria-live="polite"><div class="ey">MISMO Money</div><h1>Opening MISMO Money…</h1>' +
+        '<p>Loading every record so the figures you see are final. This usually takes about <b class="mmo-u"></b> seconds.</p>' +
+        '<div class="mmo-clock"><span class="mmo-t">0:00</span><span class="mmo-of"></span></div>' +
+        '<div class="mmo-bar"><i></i></div><ul class="mmo-list"></ul><div class="mmo-note"></div></div>';
+      gate.querySelector('.mmo-u').textContent = usualN();
+      gate.querySelector('.mmo-of').textContent = 'of about ' + usualN() + 's';
+      var list = gate.querySelector('.mmo-list');
+      OPEN_STEPS.forEach(function(n){ var li = document.createElement('li'); li.innerHTML = '<i></i><span></span>'; li.querySelector('span').textContent = n; list.appendChild(li); });
+    }
+    paintOpening();
+    if(!openT) openT = setInterval(paintOpening, 150);
+  }
+  function paintOpening(){
+    var list = gate.querySelector('.mmo-list'); if(!list) return;
+    var el = Math.max(0, (performance.now() - window.MM_OPEN_T0) / 1000), n = 0;
+    gate.querySelector('.mmo-t').textContent = Math.floor(el / 60) + ':' + String(Math.floor(el % 60)).padStart(2, '0');
+    Array.prototype.forEach.call(list.children, function(li, i){ li.classList.toggle('ok', openOk[i]); if(openOk[i]) n++; });
+    var f = Math.min(.97, Math.max(n / OPEN_STEPS.length * .85, Math.min(.9, el / usualN())));
+    gate.querySelector('.mmo-bar i').style.width = Math.round(f * 100) + '%';
+  }
+  function openStep(i){ openOk[i] = true; if(gate.classList.contains('opening')) paintOpening(); }
+  function stopOpening(){ if(openT){ clearInterval(openT); openT = null; } }
+
   window.MM_GATE = function(kind, msg){
-    if(kind === 'loading') card('Opening MISMO Money…', 'Reading the records from the private data store.' + usual(), { wait:true, bar:true });
+    if(kind === 'loading') opening();
     else card('MISMO Money Couldn’t Load', msg || 'Something went wrong.', { button:'Try Again', onClick:function(){ location.reload(); } });
   };
 
@@ -145,6 +209,7 @@
   window.MM_PREFETCH = function(){
     if(!appRead){
       appRead = readTheApp();
+      appRead.then(function(){ openStep(1); }, function(){});
       appRead.catch(function(){ appRead = null; });   /* a failed read is tried again when the page is started */
     }
     return appRead;
@@ -157,9 +222,9 @@
     if(!Object.keys((R.index() || {}).docs || {}).length && window.ResourcesSession && window.ResourcesSession.canEdit(R.config.PROJECT) && !window.MM_SKIP_RESTORE){
       return firstLoad(R);
     }
-    card('Opening MISMO Money…', 'Reading the page from the private data store.' + usual(), { bar:true });
-    progress(appFrac);
+    openStep(0); opening();
     window.MM_PREFETCH().then(function(r){
+      openStep(1);
       Object.keys(r.got).forEach(function(p){
         var ext = (p.split('.').pop() || '').toLowerCase();
         BLOBS[p] = URL.createObjectURL(new Blob([r.got[p]], { type:(TYPES[ext] || 'application/octet-stream') + (/^(js|css|html|json)$/.test(ext) ? ';charset=utf-8' : '') }));
@@ -238,7 +303,7 @@
       });
     });
     return chain.then(function(){
-      requestAnimationFrame(function(){ gate.hidden = true; gate.innerHTML = ''; document.documentElement.classList.add('mm-ready'); });
+      requestAnimationFrame(function(){ stopOpening(); gate.hidden = true; gate.innerHTML = ''; gate.className = ''; document.documentElement.classList.add('mm-ready'); });
     });
   }
 })();
