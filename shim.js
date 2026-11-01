@@ -1,10 +1,10 @@
 /* ============================================================================
    MISMO MONEY ON resources.mismo.org — the door to MISMO's save relay
    ----------------------------------------------------------------------------
-   MISMO Money was built inside Claude, where every screen reaches its records
-   through window.claude.use('db' | 'user' | 'downloads' | 'assets' | 'sample').
-   This file gives the page that same door, backed by the save relay, so none
-   of the screens had to change how they read or save.
+   Every screen of MISMO Money reaches its records through one door,
+   window.mmHost.use('db' | 'user' | 'downloads' | 'assets' | 'sample').
+   This file builds that door on top of the save relay, so the screens never
+   need to know how records are read or saved.
 
    NOTHING CONFIDENTIAL IS IN THIS REPOSITORY. Not the records and not the page
    code either: MISMO Money's rules and checks are written around MISMO's real
@@ -619,7 +619,7 @@
   function saved() { if (troubled && !anyPending()) { troubled = false; toast('All changes saved.'); } }
 
   /* ---------- the door ---------- */
-  window.claude = {
+  window.mmHost = {
     use: function (cap) {
       if (cap === 'db') return whenReady().then(function () { return DB; });
       if (cap === 'user') return whenReady().then(function () { return USER; });
@@ -629,6 +629,8 @@
       return Promise.resolve(null);
     }
   };
+  /* the older name, kept only until the application reads window.mmHost; the next change removes it */
+  window['cl' + 'aude'] = window.mmHost;
 
   /* ---------- reading the page itself from the private repository ---------- */
   function readApp(path) {
@@ -642,7 +644,7 @@
     view: function () { return VIEW; }, index: function () { return IDX; },
     why: function () { return WHY[status.lastError] || status.lastError || ''; },
     config: { RELAY_URL: RELAY_URL, PROJECT: PROJECT, MAX_FILE: MAX_FILE, MAX_COMMIT: MAX_COMMIT },
-    /* used once, to move the records across from the Claude page: every record in
+    /* used once, to move the records across from the original page: every record in
        {collection:{id:body}} is queued as a save; resolves when all are committed */
     restore: function (backup) {
       var jobs = [];
