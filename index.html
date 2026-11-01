@@ -76,7 +76,7 @@
 <script>
 /* ============================================================================
    The loader: after sign-in, read the application from the private repository
-   and run it here, exactly as the Claude page ran it.
+   and run it here, exactly as the original page ran it.
 
    app/manifest.json lists every file of the application. Each is read through
    the relay and handed to the page as a local (blob:) address, so the
@@ -218,7 +218,7 @@
   window.MM_START = function(){
     var R = window.__mmRelay;
     /* the first time only: the store is empty, so offer to load the records moved across
-       from the Claude page (a backup file kept by Jonna, never committed by hand) */
+       from the original page (a backup file kept by Jonna, never committed by hand) */
     if(!Object.keys((R.index() || {}).docs || {}).length && window.ResourcesSession && window.ResourcesSession.canEdit(R.config.PROJECT) && !window.MM_SKIP_RESTORE){
       return firstLoad(R);
     }
@@ -237,7 +237,7 @@
   };
 
   function firstLoad(R){
-    card('MISMO Money Has No Records Yet', 'Load the backup taken from the Claude page. Every record is saved to the private data store, then the page opens.',
+    card('MISMO Money Has No Records Yet', 'Load the backup taken from the original page. Every record is saved to the private data store, then the page opens.',
       { button:'Choose the Backup File', onClick:function(){ pick.click(); } });
     var skip = document.createElement('button'); skip.type = 'button'; skip.textContent = 'Open Empty';
     skip.style.cssText = 'margin-left:8px;background:transparent;color:var(--mm-ink)';
