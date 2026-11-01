@@ -629,8 +629,6 @@
       return Promise.resolve(null);
     }
   };
-  /* the older name, kept only until the application reads window.mmHost; the next change removes it */
-  window['cl' + 'aude'] = window.mmHost;
 
   /* ---------- reading the page itself from the private repository ---------- */
   function readApp(path) {
