@@ -44,6 +44,7 @@
   #mm-gate .bar i{ display:block; height:100%; width:0; background:var(--mm-sky); transition:width .2s; }
   /* the opening card: the same card as Member 360's opening screen, and the same one the page
      itself shows next (app/index.html, MM_OPENING), so opening reads as one screen */
+  html.mmo-on, html.mmo-on body{ overflow:hidden; }
   #mm-gate.opening{ background:radial-gradient(120% 90% at 100% 0%,rgba(116,191,235,.18),transparent 55%),linear-gradient(160deg,#10324a,#0b2436); }
   #mm-gate .mmo-card{ max-width:440px; width:100%; box-sizing:border-box; background:var(--mm-ocard); color:var(--mm-oink); border:1px solid rgba(116,191,235,.3);
     border-radius:12px; padding:28px 26px; box-shadow:0 24px 60px -24px rgba(0,0,0,.6); }
@@ -53,11 +54,22 @@
   #mm-gate .mmo-card h1, #mm-gate .mmo-t, #mm-gate .mmo-list li.ok{ color:var(--mm-oink); }
   #mm-gate .mmo-card p{ margin:0 0 16px; color:var(--mm-oink2); }
   #mm-gate .mmo-card p b{ font-variant-numeric:tabular-nums; }
-  #mm-gate .mmo-clock{ display:flex; align-items:baseline; gap:8px; margin:0 0 10px; }
-  #mm-gate .mmo-t{ font-size:34px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; }
-  #mm-gate .mmo-of{ font-size:12.5px; color:var(--mm-ink3); white-space:nowrap; }
+  #mm-gate .mmo-clock{ display:flex; align-items:flex-end; gap:8px; margin:0 0 10px; }
+  #mm-gate .mmo-t{ display:inline-flex; font-size:34px; font-weight:700; line-height:1; font-variant-numeric:tabular-nums; }
+  /* the clock's digits and the bar move by the browser's compositor, so they keep time while the
+     page is busy (Jonna, 1 November 2026: the seconds stuttered, then jumped); the same as the page's card */
+  #mm-gate .mmo-t .d{ display:block; height:1em; overflow:hidden; }
+  #mm-gate .mmo-t .d i{ display:block; font-style:normal; will-change:transform; animation:mmoD10 10s steps(10,end) infinite; }
+  #mm-gate .mmo-t .d i b{ display:block; height:1em; font-weight:inherit; }
+  #mm-gate .mmo-t .d.s10 i{ animation:mmoD6 60s steps(6,end) infinite; }
+  #mm-gate .mmo-t .d.m i{ animation:mmoD10 600s steps(10,end) infinite; }
+  @keyframes mmoD10{ from{ transform:translateY(0) } to{ transform:translateY(-10em) } }
+  @keyframes mmoD6{ from{ transform:translateY(0) } to{ transform:translateY(-6em) } }
+  #mm-gate .mmo-of{ font-size:12.5px; line-height:1.2; padding-bottom:3px; color:var(--mm-ink3); white-space:nowrap; }
   #mm-gate .mmo-bar{ height:5px; border-radius:3px; background:rgba(116,191,235,.2); overflow:hidden; margin:0 0 16px; }
-  #mm-gate .mmo-bar i{ display:block; height:100%; width:0; background:linear-gradient(90deg,#74bfeb,#0d314c); transition:width .4s ease; }
+  #mm-gate .mmo-bar i{ display:block; height:100%; width:100%; transform-origin:0 50%; transform:scaleX(0); will-change:transform;
+    background:linear-gradient(90deg,#74bfeb,#0d314c); animation:mmoBar 30s linear forwards; }
+  @keyframes mmoBar{ 0%{ transform:scaleX(0) } 50%{ transform:scaleX(.9) } 100%{ transform:scaleX(.97) } }
   #mm-gate .mmo-list{ list-style:none; margin:0; padding:0; display:flex; flex-direction:column; gap:7px; }
   #mm-gate .mmo-list li{ display:flex; align-items:center; gap:10px; font-size:13.5px; color:var(--mm-ink3); white-space:nowrap; }
   #mm-gate .mmo-list li i{ width:16px; height:16px; border-radius:50%; border:2px solid rgba(116,191,235,.55); border-top-color:transparent; box-sizing:border-box;
@@ -120,23 +132,31 @@
       gate.hidden = false; gate.className = 'opening';
       gate.innerHTML = '<div class="mmo-card" role="status" aria-live="polite"><div class="ey">MISMO Money</div><h1>Opening MISMO Money…</h1>' +
         '<p>Loading every record so the figures you see are final. This usually takes about <b class="mmo-u"></b> seconds.</p>' +
-        '<div class="mmo-clock"><span class="mmo-t">0:00</span><span class="mmo-of"></span></div>' +
+        '<div class="mmo-clock"><span class="mmo-t" aria-hidden="true"></span><span class="mmo-of"></span></div>' +
         '<div class="mmo-bar"><i></i></div><ul class="mmo-list"></ul><div class="mmo-note"></div></div>';
+      gate.querySelector('.mmo-t').innerHTML = digits('m', 10) + '<span>:</span>' + digits('s10', 6) + digits('s1', 10);
       gate.querySelector('.mmo-u').textContent = usualN();
       gate.querySelector('.mmo-of').textContent = 'of about ' + usualN() + 's';
       var list = gate.querySelector('.mmo-list');
       OPEN_STEPS.forEach(function(n){ var li = document.createElement('li'); li.innerHTML = '<i></i><span></span>'; li.querySelector('span').textContent = n; list.appendChild(li); });
     }
+    syncOpening();
     paintOpening();
     if(!openT) openT = setInterval(paintOpening, 150);
   }
+  function digits(cls, n){ var h = '<span class="d ' + cls + '"><i>'; for(var k = 0; k < n; k++) h += '<b>' + k + '</b>'; return h + '</i></span>'; }
+  /* the clock and the bar start at the moment opening began (their animations' start time),
+     however late the browser first draws them */
+  function syncOpening(){
+    var bar = gate.querySelector('.mmo-bar i'); if(!bar) return;
+    bar.style.animationDuration = (2 * usualN()) + 's';
+    var els = Array.prototype.slice.call(gate.querySelectorAll('.mmo-t .d i')).concat([bar]);
+    try{ els.forEach(function(e){ e.getAnimations().forEach(function(a){ a.startTime = window.MM_OPEN_T0; }); }); }
+    catch(e){ var el = Math.max(0, (performance.now() - window.MM_OPEN_T0) / 1000); els.forEach(function(x){ x.style.animationDelay = (-el) + 's'; }); }
+  }
   function paintOpening(){
     var list = gate.querySelector('.mmo-list'); if(!list) return;
-    var el = Math.max(0, (performance.now() - window.MM_OPEN_T0) / 1000), n = 0;
-    gate.querySelector('.mmo-t').textContent = Math.floor(el / 60) + ':' + String(Math.floor(el % 60)).padStart(2, '0');
-    Array.prototype.forEach.call(list.children, function(li, i){ li.classList.toggle('ok', openOk[i]); if(openOk[i]) n++; });
-    var f = Math.min(.97, Math.max(n / OPEN_STEPS.length * .85, Math.min(.9, el / usualN())));
-    gate.querySelector('.mmo-bar i').style.width = Math.round(f * 100) + '%';
+    Array.prototype.forEach.call(list.children, function(li, i){ li.classList.toggle('ok', openOk[i]); });
   }
   function openStep(i){ openOk[i] = true; if(gate.classList.contains('opening')) paintOpening(); }
   function stopOpening(){ if(openT){ clearInterval(openT); openT = null; } }
@@ -277,6 +297,8 @@
     });
     /* everything goes in under the gate; the gate stays on top until the scripts have run */
     var scripts = Array.prototype.slice.call(frag.querySelectorAll('script'));
+    /* the page fills in under the opening card without a scroll bar, so the card does not shift (the page's own card takes this over) */
+    if(gate.classList.contains('opening')) document.documentElement.classList.add('mmo-on');
     document.body.insertBefore(frag, gate);
     var mast = document.querySelector('.mast-right');
     if(mast && !document.getElementById('rs-account')){
@@ -303,7 +325,7 @@
       });
     });
     return chain.then(function(){
-      requestAnimationFrame(function(){ stopOpening(); gate.hidden = true; gate.innerHTML = ''; gate.className = ''; document.documentElement.classList.add('mm-ready'); });
+      requestAnimationFrame(function(){ stopOpening(); gate.hidden = true; gate.innerHTML = ''; gate.className = ''; if(!document.getElementById('mmo')) document.documentElement.classList.remove('mmo-on'); document.documentElement.classList.add('mm-ready'); });
     });
   }
 })();
