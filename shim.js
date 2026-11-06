@@ -161,7 +161,53 @@
     });
     rebuildView();
   }
-  function applyOp(map, op) {
+  /* ---------- saving only what was changed (November 5, 2026) ----------
+     A save of a whole record used to be sent again, whole, after a 409, so it could put back
+     what someone else had just saved. Now a save remembers the record as this page had it
+     when the save was made (op.base). When the commit is built, on the newest copy and again
+     after every 409, only the fields that differ from that are written; every other field
+     keeps its newest value, field by field inside nested parts too. "" / null / missing count
+     as the same, and so do 5 and "5". A record someone else deleted in the meantime is not
+     brought back: that save is refused and the page says so. A brand-new record saves as
+     before. */
+  function isPlain(v) { return !!v && typeof v === 'object' && !Array.isArray(v); }
+  function sig(v) {
+    if (Array.isArray(v)) return '[' + v.map(sig).join(',') + ']';
+    if (isPlain(v)) return '{' + Object.keys(v).sort().map(function (k) { return JSON.stringify(k) + ':' + sig(v[k]); }).join(',') + '}';
+    return v === undefined ? 'null' : JSON.stringify(v);
+  }
+  function normVal(v) {
+    if (v === undefined || v === null || v === '') return '';
+    if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+    if (typeof v === 'string') return v;
+    if (isPlain(v) && !Object.keys(v).length) return '';
+    return sig(v);
+  }
+  function sameVal(a, b) { return normVal(a) === normVal(b); }
+  function mergeDoc(cur, mine, base) {
+    if (!isPlain(cur) || !isPlain(mine) || !isPlain(base)) return clone(mine);
+    var out = clone(cur), keys = {};
+    Object.keys(mine).concat(Object.keys(base)).forEach(function (k) { keys[k] = 1; });
+    Object.keys(keys).forEach(function (k) {
+      var m = mine[k], b = base[k], c = cur[k];
+      if (sameVal(m, b)) {              /* not changed here: the newest value stands */
+        if (!(k in out) && b === undefined && m !== undefined) out[k] = clone(m);   /* a blank nobody had */
+        return;
+      }
+      if (m === undefined) { delete out[k]; return; }
+      if (isPlain(m) && (isPlain(b) || b == null) && (isPlain(c) || c == null)) { out[k] = mergeDoc(c || {}, m, b || {}); return; }
+      out[k] = clone(m);
+    });
+    return out;
+  }
+  var GONE = 'Someone else deleted this record while it was open here, so this change was not saved.';
+  function applyOp(map, op, building) {
+    if (op.kind === 'set' && op.base) {
+      var gone = map[op.path] === undefined;
+      if (building) op.gone = gone;
+      if (!gone) map[op.path] = mergeDoc(map[op.path], op.data, op.base);
+      return;
+    }
     if (op.kind === 'set') map[op.path] = clone(op.data);
     else if (op.kind === 'update') map[op.path] = Object.assign({}, map[op.path] || {}, clone(op.data));
     else if (op.kind === 'delete') delete map[op.path];
@@ -196,7 +242,7 @@
     ops.forEach(function (op) { if (!(op.path in after)) after[op.path] = SERVER[op.path]; });
     var tmp = {};
     Object.keys(after).forEach(function (p) { if (after[p] !== undefined) tmp[p] = clone(after[p]); });
-    ops.forEach(function (op) { applyOp(tmp, op); });
+    ops.forEach(function (op) { applyOp(tmp, op, true); });   /* on the newest copy, read again after a 409 */
     Object.keys(after).forEach(function (p) {
       var cur = idx.docs[p], body = tmp[p];
       if (body === undefined) {
@@ -265,7 +311,9 @@
     checkPath(path);
     if (kind === 'update' && VIEW[path] === undefined) return Promise.reject(err('not-found', 'No document to update: ' + path));
     return new Promise(function (res, rej) {
-      pending.push({ kind: kind, path: path, data: data, res: res, rej: rej });
+      /* a whole-record save carries the record as this page had it (see "saving only what was changed") */
+      var base = kind === 'set' && VIEW[path] !== undefined ? clone(VIEW[path]) : null;
+      pending.push({ kind: kind, path: path, data: kind === 'set' ? clone(data) : data, base: base, res: res, rej: rej });
       rebuildView();
       schedule(FLUSH_MS);
     });
@@ -313,7 +361,7 @@
         p.files.forEach(function (x) { if (x.name !== 'index') FILES[x.name] = { docs: x.body.docs }; });
         sending = [];
         rebuild();
-        batch.forEach(function (op) { op.res(); });
+        batch.forEach(function (op) { if (op.gone) { op.rej(err('not-found', GONE)); toast(GONE, 'bad'); } else op.res(); });
         saved();
       }, function (e) {
         if (e && e.status === 409 && tries < 8) {
