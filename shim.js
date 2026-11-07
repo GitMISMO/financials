@@ -184,9 +184,94 @@
     return sig(v);
   }
   function sameVal(a, b) { return normVal(a) === normVal(b); }
-  function mergeDoc(cur, mine, base) {
+  /* ---------- lists inside a record (November 7, 2026) ----------
+     Most records keep their entries in a list (the change log, the issues, the cash batches).
+     A list used to be written back whole, so when two saves crossed, the entry the other
+     person had just added was dropped. Now a list is merged entry by entry:
+       - entries that carry an id (id, key, batchId or code, the same field on every entry and
+         never repeated) are matched by it: an entry added here is added, one removed here is
+         removed, one changed here is merged field by field, and everything the other save
+         did stays;
+       - a list without such an id that both saves only added to keeps both additions;
+       - anything else (both changed the same list some other way) keeps this page's list, as
+         before, and the page says so, so nobody's change goes missing quietly.
+     A count beside the list (n, when it was the list's length) follows the merged list. */
+  var LIST_IDS = ['id', 'key', 'batchId', 'code'];
+  function listId(lists) {
+    for (var i = 0; i < LIST_IDS.length; i++) {
+      var f = LIST_IDS[i];
+      var ok = lists.every(function (l) {
+        var seen = {};
+        return l.every(function (x) {
+          if (!isPlain(x)) return false;
+          var v = x[f];
+          if ((typeof v !== 'string' || !v) && typeof v !== 'number') return false;
+          v = typeof v + ':' + v;
+          if (seen[v]) return false;
+          seen[v] = 1; return true;
+        });
+      });
+      if (ok && lists.some(function (l) { return l.length; })) return f;
+    }
+    return null;
+  }
+  function mergeList(cur, mine, base, notes, where) {
+    var f = listId([cur, mine, base]);
+    if (f) {
+      var idOf2 = function (x) { return typeof x[f] + ':' + x[f]; };
+      var byB = {}, byM = {};
+      base.forEach(function (x) { byB[idOf2(x)] = x; });
+      mine.forEach(function (x) { byM[idOf2(x)] = x; });
+      var out = [], inOut = {};
+      cur.forEach(function (c) {
+        var id = idOf2(c), b = byB[id], m = byM[id];
+        if (b !== undefined && m === undefined) {          /* removed here */
+          if (sameVal(c, b)) return;
+          notes.push(where + ': an entry removed here was changed by someone else, so it was kept');
+        } else if (m !== undefined && !sameVal(m, b)) {    /* changed (or added) here */
+          c = mergeDoc(c, m, b || {}, notes, where);
+        }
+        out.push(clone(c)); inOut[id] = 1;
+      });
+      mine.forEach(function (m, i) {
+        var id = idOf2(m);
+        if (inOut[id]) return;
+        var b = byB[id];
+        if (b !== undefined && sameVal(m, b)) return;      /* someone else removed it; nothing changed here */
+        if (b !== undefined) notes.push(where + ': an entry changed here had been removed by someone else, so it was put back');
+        /* added here: it goes after the entry it followed here, and after anything the other
+           save added right there (so two entries added at the end stay in the order saved) */
+        var at = 0;
+        for (var j = i - 1; j >= 0; j--) {
+          var k = -1, pid = idOf2(mine[j]);
+          for (var q = 0; q < out.length; q++) if (idOf2(out[q]) === pid) { k = q; break; }
+          if (k >= 0) { at = k + 1; break; }
+        }
+        while (at < out.length && byM[idOf2(out[at])] === undefined) at++;
+        out.splice(at, 0, clone(m)); inOut[id] = 1;
+      });
+      return out;
+    }
+    /* no id: if both only added to the end, keep both additions */
+    var sigs = function (l) { return l.map(sig); };
+    var sb = sigs(base), sm = sigs(mine), sc = sigs(cur);
+    var prefix = function (s) { return s.length >= sb.length && sb.every(function (x, i) { return s[i] === x; }); };
+    if (prefix(sm) && prefix(sc)) {
+      var out2 = clone(cur), have = sc.slice(sb.length);
+      sm.slice(sb.length).forEach(function (s, i) {
+        var at2 = have.indexOf(s);
+        if (at2 >= 0) { have.splice(at2, 1); return; }    /* the same entry, added by both */
+        out2.push(clone(mine[sb.length + i]));
+      });
+      return out2;
+    }
+    notes.push(where + ': someone else changed this list at the same time, and this page’s version was kept');
+    return clone(mine);
+  }
+  function mergeDoc(cur, mine, base, notes, where) {
+    notes = notes || []; where = where || '';
     if (!isPlain(cur) || !isPlain(mine) || !isPlain(base)) return clone(mine);
-    var out = clone(cur), keys = {};
+    var out = clone(cur), keys = {}, lists = {};
     Object.keys(mine).concat(Object.keys(base)).forEach(function (k) { keys[k] = 1; });
     Object.keys(keys).forEach(function (k) {
       var m = mine[k], b = base[k], c = cur[k];
@@ -195,8 +280,17 @@
         return;
       }
       if (m === undefined) { delete out[k]; return; }
-      if (isPlain(m) && (isPlain(b) || b == null) && (isPlain(c) || c == null)) { out[k] = mergeDoc(c || {}, m, b || {}); return; }
+      if (isPlain(m) && (isPlain(b) || b == null) && (isPlain(c) || c == null)) { out[k] = mergeDoc(c || {}, m, b || {}, notes, where ? where + '.' + k : k); return; }
+      if (Array.isArray(m) && Array.isArray(b) && Array.isArray(c)) {
+        if (sameVal(c, b)) { out[k] = clone(m); return; }   /* only changed here */
+        out[k] = mergeList(c, m, b, notes, where ? where + '.' + k : k); lists[k] = 1; return;
+      }
       out[k] = clone(m);
+    });
+    /* a count kept beside a merged list follows it */
+    Object.keys(lists).forEach(function (k) {
+      if (typeof out.n === 'number' && Array.isArray(base[k]) && Array.isArray(mine[k]) && Array.isArray(cur[k]) &&
+          base.n === base[k].length && mine.n === mine[k].length && cur.n === cur[k].length) out.n = out[k].length;
     });
     return out;
   }
@@ -204,8 +298,8 @@
   function applyOp(map, op, building) {
     if (op.kind === 'set' && op.base) {
       var gone = map[op.path] === undefined;
-      if (building) op.gone = gone;
-      if (!gone) map[op.path] = mergeDoc(map[op.path], op.data, op.base);
+      if (building) { op.gone = gone; op.clashes = []; }
+      if (!gone) map[op.path] = mergeDoc(map[op.path], op.data, op.base, building ? op.clashes : [], op.path);
       return;
     }
     if (op.kind === 'set') map[op.path] = clone(op.data);
@@ -361,7 +455,15 @@
         p.files.forEach(function (x) { if (x.name !== 'index') FILES[x.name] = { docs: x.body.docs }; });
         sending = [];
         rebuild();
-        batch.forEach(function (op) { if (op.gone) { op.rej(err('not-found', GONE)); toast(GONE, 'bad'); } else op.res(); });
+        batch.forEach(function (op) {
+          if (op.gone) { op.rej(err('not-found', GONE)); toast(GONE, 'bad'); return; }
+          if (op.clashes && op.clashes.length) {
+            status.clashes = (status.clashes || []).concat(op.clashes.map(function (t) { return { at: new Date().toISOString(), what: t }; })).slice(-50);
+            if (window.console) console.warn('MISMO Money: saves crossed. ' + op.clashes.join('; '));
+            toast('Saved. Someone else changed the same record at the same moment (' + op.clashes[0] + '). Please check it.', 'bad');
+          }
+          op.res();
+        });
         saved();
       }, function (e) {
         if (e && e.status === 409 && tries < 8) {
