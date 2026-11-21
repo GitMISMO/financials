@@ -96,15 +96,14 @@
     if(opts.bar){ var b = document.createElement('div'); b.className = 'bar'; b.innerHTML = '<i></i>'; c.appendChild(b); }
     if(opts.button){ var btn = document.createElement('button'); btn.type = 'button'; btn.textContent = opts.button; btn.addEventListener('click', opts.onClick); c.appendChild(btn); }
   }
-  /* how long opening usually takes on this computer: the middle of the last five openings
-     the application timed (its own "Reading" note says the same), 15 seconds the first time */
-  function usual(){
-    var a = [];
-    try{ a = JSON.parse(localStorage.getItem('mm.openSeconds') || '[]'); }catch(e){}
-    a = (Array.isArray(a) ? a : []).filter(function(x){ return typeof x === 'number' && x > 0 && x < 600; }).sort(function(x, y){ return x - y; });
-    var n = a.length ? Math.max(1, Math.ceil(a[Math.floor(a.length / 2)])) : 15;
-    return ' This usually takes about ' + n + ' seconds.';
-  }
+  /* how long opening usually takes on this computer (usualN below): the middle of the last five
+     openings the application timed, 15 seconds the first time; from a minute and a half up it
+     reads in minutes */
+  function usualWords(n){ if(n < 90) return n + ' seconds'; var m = Math.round(n / 60); return m + (m === 1 ? ' minute' : ' minutes'); }
+  function usualShort(n){ return n < 90 ? n + 's' : Math.round(n / 60) + ' min'; }
+  /* an opening that is not watched the whole way is not timed for that note (app/index.html) */
+  window.MM_OPEN_HIDDEN = document.visibilityState === 'hidden';
+  document.addEventListener('visibilitychange', function(){ if(document.visibilityState === 'hidden') window.MM_OPEN_HIDDEN = true; });
   function progress(f){ var i = gate.querySelector('.bar i'); if(i) i.style.width = Math.round(f * 100) + '%'; }
 
   /* The opening card (Jonna, 1 November 2026: "do the loading screen like member 360 did it"):
@@ -113,17 +112,19 @@
      last two once every figure is final (app/index.html). The clock starts now (MM_OPEN_T0), and
      the page's card carries it on. */
   var OPEN_STEPS = ['Saved Records', 'The Page', 'Figures Worked Out', 'Final Figures'], openOk = [false, false, false, false], openT = null;
-  function usualN(){ var m = usual().match(/(\d+)/); return m ? +m[1] : 15; }
+  /* openings of three minutes or more were left in a hidden tab, not slow (Jonna, 21 November
+     2026: "233 seconds instead of minutes"); the application no longer keeps them */
+  function usualN(){ var a = []; try{ a = JSON.parse(localStorage.getItem('mm.openSeconds') || '[]'); }catch(e){} a = (Array.isArray(a) ? a : []).filter(function(x){ return typeof x === 'number' && x > 0 && x < 180; }).sort(function(x, y){ return x - y; }); return a.length ? Math.max(1, Math.ceil(a[Math.floor(a.length / 2)])) : 15; }
   function opening(){
     if(typeof window.MM_OPEN_T0 !== 'number') window.MM_OPEN_T0 = performance.now();
     if(!gate.classList.contains('opening')){
       gate.hidden = false; gate.className = 'opening';
       gate.innerHTML = '<div class="mmo-card" role="status" aria-live="polite"><div class="ey">MISMO Money</div><h1>Opening MISMO Money…</h1>' +
-        '<p>Loading every record so the figures you see are final. This usually takes about <b class="mmo-u"></b> seconds.</p>' +
+        '<p>Loading every record so the figures you see are final. This usually takes about <b class="mmo-u"></b>.</p>' +
         '<div class="mmo-clock"><span class="mmo-t">0:00</span><span class="mmo-of"></span></div>' +
         '<div class="mmo-bar"><i></i></div><ul class="mmo-list"></ul><div class="mmo-note"></div></div>';
-      gate.querySelector('.mmo-u').textContent = usualN();
-      gate.querySelector('.mmo-of').textContent = 'of about ' + usualN() + 's';
+      gate.querySelector('.mmo-u').textContent = usualWords(usualN());
+      gate.querySelector('.mmo-of').textContent = 'of about ' + usualShort(usualN());
       var list = gate.querySelector('.mmo-list');
       OPEN_STEPS.forEach(function(n){ var li = document.createElement('li'); li.innerHTML = '<i></i><span></span>'; li.querySelector('span').textContent = n; list.appendChild(li); });
     }
