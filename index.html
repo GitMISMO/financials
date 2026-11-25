@@ -8,6 +8,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <title>MISMO Money</title>
+<link rel="icon" type="image/png" sizes="48x48" href="https://resources.mismo.org/assets/favicon-48x48.png">
 <!--
   MISMO Money on resources.mismo.org: the public shell.
 
@@ -270,6 +271,8 @@
     var frag = t.content;
     var title = frag.querySelector('title');
     if(title){ document.title = 'MISMO Money'; title.remove(); }
+    /* the tab icon is the shared mismo.org one in this page's head; drop any icon the application brings */
+    Array.prototype.forEach.call(frag.querySelectorAll('link[rel~="icon"], link[rel="shortcut icon"]'), function(l){ l.remove(); });
     var waits = [];
     Array.prototype.forEach.call(frag.querySelectorAll('link[href]'), function(l){
       var h = l.getAttribute('href');
