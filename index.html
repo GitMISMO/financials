@@ -9,6 +9,23 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
 <title>MISMO Money</title>
 <link rel="icon" type="image/png" sizes="48x48" href="https://resources.mismo.org/assets/favicon-48x48.png">
+<!-- The browser's Back button (Jonna, Nov 25, 2026, CN-033): the shared /assets/back.js makes each page of the
+     left menu a Back step, and Back first closes the right-hand rail. MISMO Money's menu is built as tabs
+     (#tablist, role=tab, aria-selected), so it names its pages to the helper itself. -->
+<script src="/assets/back.js"></script>
+<script>
+(function(){
+  if(!window.MismoBack) return;
+  MismoBack.pages({
+    current: function(){ var b = document.querySelector('#tablist [role=tab][aria-selected="true"]'); return b ? b.id : ''; },
+    go: function(id){ var b = document.getElementById(id); if(b && b.closest('#tablist')) b.click(); }
+  });
+  MismoBack.layer({
+    isOpen: function(){ return !!(window.MISMO_RAIL && window.MISMO_RAIL.isOpen()); },
+    close: function(){ if(window.MISMO_RAIL) window.MISMO_RAIL.close(); }
+  });
+})();
+</script>
 <!--
   MISMO Money on resources.mismo.org: the public shell.
 
